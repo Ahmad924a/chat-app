@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat App</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <h3>Join Chat</h3>
+      <input id="nickname" placeholder="Enter nickname">
+      <input id="roomCode" placeholder="Enter room code">
+      <button onclick="joinRoom()">Join</button>
+      <button onclick="toggleDarkMode()">🌙 Dark Mode</button>
+      <div id="rooms"></div>
+    </div>
+
+    <!-- Chat Window -->
+    <div class="chat-window">
+      <div id="chat" class="messages"></div>
+      <div class="input-area">
+        <input id="msg" placeholder="Type a message" oninput="typing()">
+        <input type="file" id="fileInput" onchange="sendFile()">
+        <button onclick="sendMsg()">Send</button>
+        <button onclick="addEmoji('😊')">😊</button>
+        <button onclick="addEmoji('👍')">👍</button>
+        <button onclick="addEmoji('❤️')">❤️</button>
+      </div>
+      <div id="typing"></div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+
+    function joinRoom() {
+      const nickname = document.getElementById("nickname").value;
+      const roomCode = document.getElementById("roomCode").value;
+      socket.emit("joinRoom", { roomCode, nickname });
+    }
+
+    socket.on("chatHistory", (history) => {
+      const chatDiv = document.getElementById("chat");
+      chatDiv.innerHTML = "";
+      history.forEach(msg => {
+        if (msg.fileName) {
+          renderFile(msg);
+        } else {
+          renderMessage(msg);
+        }
+      });
+    });
+
+    socket.on("chatMessage", (msg) => {
+      renderMessage(msg);
+    });
+
+    socket.on("fileMessage", (msg) => {
+      renderFile(msg);
+    });
+
+    socket.on("systemMessage", (msg) => {
+      document.getElementById("chat").innerHTML += `<p class="system"><i>${msg}</i></p>`;
+    });
+
+    function sendMsg() {
+      const roomCode = document.getElementById("roomCode").value;
+      const message = document.getElementById("msg").value;
+      socket.emit("chatMessage", { roomCode, message });
+      document.getElementById("msg").value = "";
+    }
+
+    function renderMessage(msg) {
+      const chatDiv = document.getElementById("chat");
+      const nickname = document.getElementById("nickname").value;
+      const isSelf = msg.nickname === nickname;
+      const bubbleClass = isSelf ? "self" : "other";
+      const time = new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      chatDiv.innerHTML += `<p class="${bubbleClass}"><b>${msg.nickname}:</b> ${msg.message} <span class="time">${time}</span></p>`;
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    function renderFile(msg) {
+      const chatDiv = document.getElementById("chat");
+      const nickname = document.getElementById("nickname").value;
+      const isSelf = msg.nickname === nickname;
+      const bubbleClass = isSelf ? "self" : "other";
+
+      if (msg.fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
+        chatDiv.innerHTML += `<p class="${bubbleClass}"><b>${msg.nickname}:</b><br><img src="${msg.fileData}" style="max-width:200px;"><br><small>${msg.fileName}</small></p>`;
+      } else {
+        chatDiv.innerHTML += `<p class="${bubbleClass}"><b>${msg.nickname}:</b> <a href="${msg.fileData}" download="${msg.fileName}">${msg.fileName}</a></p>`;
+      }
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    // Typing indicator
+    function typing() {
+      const roomCode = document.getElementById("roomCode").value;
+      const nickname = document.getElementById("nickname").value;
+      socket.emit("typing", { roomCode, nickname });
+    }
+
+    socket.on("typing", (nickname) => {
+      const typingDiv = document.getElementById("typing");
+      typingDiv.innerHTML = `${nickname} is typing...`;
+      setTimeout(() => typingDiv.innerHTML = "", 2000);
+    });
+
+    // Emoji support
+    function addEmoji(emoji) {
+      const msgInput = document.getElementById("msg");
+      msgInput.value += emoji;
+      msgInput.focus();
+    }
+
+    // Dark mode toggle
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark-mode");
+    }
+  </script>
+</body>
+</html>
